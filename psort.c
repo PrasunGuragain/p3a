@@ -3,6 +3,7 @@ struct record {
   char* remainder;
 };
 
+// testing sorting branch worked
 int main(int argc, char* argv[]){
   // too little arguments
   if (argc < 2 || argc > 3){
