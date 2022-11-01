@@ -3,11 +3,18 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <limits.h>
 
-typedef struct record {
+struct record {
   int key;
   char remainder[96];
-} this_record;
+};
+
+typedef struct args{
+    struct record *array;
+    int low;
+    int high;
+} t_arg;
 
 // function that swaps elements
 void swap(struct record *a, struct record *b){
@@ -41,6 +48,14 @@ void quicksort(struct record array[],int low, int high){
   }
 }
 
+void *sort(void *ptr){
+    t_arg *curr_arg = ptr;
+    struct record *array = curr_arg->array;
+    int low = curr_arg->low;
+    int high = curr_arg->high;
+    quicksort(array, low, high);
+}
+
 int main(int argc, char* argv[]){
     // too little arguments
     if (argc != 3){
@@ -51,8 +66,8 @@ int main(int argc, char* argv[]){
     char *inputFile;
     char *outputFile;
     char line[256];
-    this_record *array;
-    array = malloc(100*sizeof(this_record));
+    struct record *array;
+    array = malloc(100*sizeof(struct record));
 
     inputFile = argv[1];
     outputFile = argv[2];
@@ -63,9 +78,13 @@ int main(int argc, char* argv[]){
         printf("File \"%s\" does not exist!\n", inputFile);
     }
 
-    printf("Size: %ld", sizeof(this_record));
+    /*
+    char buffer[256];
+    read(fp, buffer, 100);
+    */
+
     while(fgets(line, 256, fp)){
-        this_record new_record;
+        struct record new_record;
         char *ptr = line;
         int key = *(int *)line;
         new_record.key = key;
@@ -75,6 +94,55 @@ int main(int argc, char* argv[]){
     }
     fclose(fp);
 
+    int num_proc = get_nprocs();
+    int sections = numLines/num_proc;
+    int i = 0;
+    while(i < numLines){
+        // current range: i to i + section
+        pthread_t thread_id;
+        t_arg curr_arg = {.array = array, .low = i, .high = i + sections};
+        pthread_create(&thread_id, NULL, &sort, &curr_arg);
+        pthread_join(thread_id, NULL);
+        i += sections;
+        //quicksort(array, i, i + sections);
+    }
+
+    int min_value = INT_MAX;
+    struct record min_record;
+    int min_counter;
+
+    int pointer_array[num_proc];
+    int current = 0;
+    for(int k = 0; k < num_proc; k++){
+        pointer_array[k] = current;
+        current += sections;
+    }
+
+    struct record *sorted_array;
+    sorted_array = malloc(100*sizeof(struct record));
+
+    int j = 0;
+    while(j < numLines){
+        int l = 0;
+        while(l < num_proc){
+            if(array[pointer_array[j]].key < min_value){
+                min_value = array[pointer_array[j]].key;
+                min_record = array[pointer_array[j]];
+                min_counter = j;
+            }
+            l++;
+        }
+        sorted_array[j] = min_record;
+        pointer_array[j] += sizeof(struct record);
+        j++;
+    }
+
+    for(int m = 0; m < numLines; m++){
+        printf("%d\n", sorted_array[m].key);
+    }
+
+    //quicksort(array,0,numLines-1);
+
     /*
     The input file will consist of records; within each record is a key. The key is the first four bytes of the record. The records are fixed-size, and are each 100 bytes (which includes the key).
     A successful sort will read all the records into memory from the input file, sort them, and then write them out to the output file.
@@ -82,31 +150,5 @@ int main(int argc, char* argv[]){
     You can assume that this is a one-pass sort, i.e., the data can fit into memory. You do not have to implement a multi-pass sort.
     */
 
-    // *(int*)(input + i*100 + j-4)
-    // int key = *(int *)memaddr;
-
-    /*
-    int values[1000];
-    int num_of_process = get_nprocs();
-    int num_of_threads = numLines/num_of_process;
-    for(int i = 0; i < num_of_threads; i++){
-        pthread_t thread_id;
-        pthread_create(&thread_id, NULL, sort, values);
-        pthread_join(thread_id, NULL);
-    }
-    */
-
   return -1;
 }
-
-/*
-// sorting comparison
-int cmpfunc (const void * a, const void * b) {
-   return ( *(int*)a - *(int*)b );
-}
-
-void sort(int* values){
-    qsort(values, 5, sizeof(int), cmpfunc);
-    printf("New Thread");
-}
-*/
